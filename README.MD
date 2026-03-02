@@ -46,7 +46,7 @@ To make the tunnel functional, you must own a domain and configure the following
 
 Clone the repository and install the required Python libraries:
 ```bash
-git clone [https://github.com/masterking32/MasterDnsVPN.git](https://github.com/masterking32/MasterDnsVPN.git)
+git clone https://github.com/masterking32/MasterDnsVPN.git
 cd MasterDnsVPN
 pip install -r requirements.txt
 ```
