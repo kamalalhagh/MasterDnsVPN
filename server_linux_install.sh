@@ -59,7 +59,8 @@ if systemctl list-unit-files | grep -q masterdnsvpn.service; then
     systemctl stop masterdnsvpn 2>/dev/null || true
 fi
 
-check_port53() { lsof -i :53 -t > /dev/null 2>&1; }
+# check_port53() { lsof -i :53 -t > /dev/null 2>&1; }
+check_port53() { netstat -tunlp 2>/dev/null | awk '{print $4}' | grep -qE '.*:53$'; }
 
 if check_port53; then
     log_warn "Port 53 is occupied. Cleaning up..."
@@ -83,7 +84,8 @@ if check_port53; then
     done
 
     if check_port53; then
-        OCC_INFO=$(lsof -i :53 -n -P | grep -E "LISTEN|UDP" | awk 'NR==1 {print $1 " (PID: " $2 ")"}')
+        # OCC_INFO=$(lsof -i :53 -n -P | grep -E "LISTEN|UDP" | awk 'NR==1 {print $1 " (PID: " $2 ")"}')
+        OCC_INFO=$(netstat -tunlp 2>/dev/null | grep -E '.*:53\s+' | head -n 1 | awk '{split($NF,a,"/"); print a[2] " (PID: " a[1] ")"}')
         log_error "Port 53 is still held by: ${BOLD}${RED}${OCC_INFO:-Unknown}${NC}\n       Kill it manually and restart."
     fi
 fi
