@@ -1,4 +1,4 @@
-# MasterDnsVPN Client
+﻿# MasterDnsVPN Client
 # Author: MasterkinG32
 # Github: https://github.com/masterking32
 # Year: 2026
@@ -136,6 +136,9 @@ class MasterDnsVPNClient:
         self.arq_window_size = self.config.get("ARQ_WINDOW_SIZE", 3000)
         self.arq_initial_rto = self.config.get("ARQ_INITIAL_RTO", 0.2)
         self.arq_max_rto = self.config.get("ARQ_MAX_RTO", 1.5)
+        self.socks_handshake_timeout = float(
+            self.config.get("SOCKS_HANDSHAKE_TIMEOUT", 240.0)
+        )
 
         self.logger.debug("<magenta>[INIT]</magenta> MasterDnsVPNClient initialized.")
 
@@ -1753,7 +1756,7 @@ class MasterDnsVPNClient:
             try:
                 await asyncio.wait_for(
                     self.active_streams[stream_id]["handshake_event"].wait(),
-                    timeout=60.0,
+                    timeout=self.socks_handshake_timeout,
                 )
 
                 stream_data = self.active_streams.get(stream_id)
@@ -1799,6 +1802,27 @@ class MasterDnsVPNClient:
                         return
                 else:
                     raise ConnectionError("Stream closed before handshake completion.")
+
+            except asyncio.TimeoutError:
+                stream_data = self.active_streams.get(stream_id, {})
+                socks_err_ptype = stream_data.get(
+                    "socks_error_packet", Packet_Type.SOCKS5_UPSTREAM_UNAVAILABLE
+                )
+                self.logger.debug(
+                    f"SOCKS handshake timed out for stream {stream_id} after {self.socks_handshake_timeout:.1f}s"
+                )
+                try:
+                    fail_reply = self._build_socks5_fail_reply(socks_err_ptype)
+                    writer.write(fail_reply)
+                    await writer.drain()
+                except Exception:
+                    pass
+                await self.close_stream(
+                    stream_id,
+                    reason="SOCKS handshake timeout",
+                    abortive=True,
+                )
+                return
 
             except Exception as e:
                 stream_data = self.active_streams.get(stream_id, {})
@@ -2410,13 +2434,10 @@ class MasterDnsVPNClient:
         pending_tx = stream_data.get("tx_queue", [])
         if pending_tx:
             for item in pending_tx:
-                if item[2] in (
-                    Packet_Type.STREAM_FIN,
-                    Packet_Type.STREAM_FIN_ACK,
-                    Packet_Type.STREAM_RST,
-                    Packet_Type.STREAM_DATA_ACK,
-                    Packet_Type.STREAM_SYN_ACK,
-                    Packet_Type.SOCKS5_SYN_ACK,
+                ptype = int(item[2])
+                if (
+                    ptype in self._packable_control_types
+                    and ptype != Packet_Type.SOCKS5_SYN
                 ):
                     heapq.heappush(self.main_queue, item)
                     self._inc_priority_counter(self.__dict__, item[0])

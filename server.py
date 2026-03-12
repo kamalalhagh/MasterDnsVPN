@@ -620,7 +620,7 @@ class MasterDnsVPNServer:
     ):
         """Handle STREAM_SYN packets without blocking current response."""
         if self.loop:
-            self.loop.create_task(self._handle_stream_syn(session_id, stream_id))
+            self.loop.create_task(self._handle_stream_syn(session_id, stream_id, sn))
 
     def _map_socks5_rep_to_packet(self, rep_code: int) -> int:
         """Map SOCKS5 REP code to Packet_Type."""
@@ -1672,13 +1672,10 @@ class MasterDnsVPNServer:
         if pending_tx:
             main_q = session.setdefault("main_queue", [])
             for item in pending_tx:
-                if item[2] in (
-                    Packet_Type.STREAM_FIN,
-                    Packet_Type.STREAM_FIN_ACK,
-                    Packet_Type.STREAM_RST,
-                    Packet_Type.STREAM_DATA_ACK,
-                    Packet_Type.STREAM_SYN_ACK,
-                    Packet_Type.SOCKS5_SYN_ACK,
+                ptype = int(item[2])
+                if (
+                    ptype in self._packable_control_types
+                    and ptype != Packet_Type.SOCKS5_SYN
                 ):
                     heapq.heappush(main_q, item)
                     self._inc_priority_counter(session, item[0])
@@ -1835,10 +1832,12 @@ class MasterDnsVPNServer:
         heapq.heappush(stream_data["tx_queue"], queue_item)
         self._inc_priority_counter(stream_data, eff_priority)
 
-    async def _handle_stream_syn(self, session_id, stream_id):
+    async def _handle_stream_syn(self, session_id, stream_id, syn_sn=0):
         session = self.sessions.get(session_id)
         if not session:
             return
+
+        syn_sn = int(syn_sn) & 0xFFFF
 
         if stream_id in session.get("closed_streams", {}):
             await self._enqueue_packet(
@@ -1849,9 +1848,11 @@ class MasterDnsVPNServer:
         session_streams = session["streams"]
 
         if stream_id in session_streams:
-            await self._enqueue_packet(
-                session_id, 2, stream_id, 0, Packet_Type.STREAM_SYN_ACK, b""
-            )
+            existing = session_streams.get(stream_id, {})
+            if existing.get("status") == "CONNECTED" and existing.get("arq_obj"):
+                await self._enqueue_packet(
+                    session_id, 2, stream_id, syn_sn, Packet_Type.STREAM_SYN_ACK, b""
+                )
             return
 
         now = time.monotonic()
@@ -1859,7 +1860,7 @@ class MasterDnsVPNServer:
             "stream_id": stream_id,
             "created_at": now,
             "last_activity": now,
-            "status": "SOCKS_HANDSHAKE",
+            "status": "CONNECTING",
             "arq_obj": None,
             "tx_queue": [],
             "priority_counts": {},
@@ -1906,7 +1907,7 @@ class MasterDnsVPNServer:
 
             syn_data = b"SYA:" + os.urandom(4)
             await self._enqueue_packet(
-                session_id, 2, stream_id, 0, Packet_Type.STREAM_SYN_ACK, syn_data
+                session_id, 2, stream_id, syn_sn, Packet_Type.STREAM_SYN_ACK, syn_data
             )
             self.logger.debug(
                 f"<green>Stream <cyan>{stream_id}</cyan> connected to Forward Target: <blue>{self.forward_ip}:{self.forward_port}</blue> for Session <cyan>{session_id}</cyan></green>"
