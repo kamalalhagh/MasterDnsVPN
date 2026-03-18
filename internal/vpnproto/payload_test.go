@@ -12,12 +12,12 @@ import (
 	"testing"
 
 	"masterdnsvpn-go/internal/compression"
-	ENUMS "masterdnsvpn-go/internal/enums"
+	Enums "masterdnsvpn-go/internal/enums"
 )
 
 func TestPreparePayloadCompressesSupportedPacket(t *testing.T) {
 	payload := bytes.Repeat([]byte("abcdabcdabcdabcd"), 16)
-	compressed, used := PreparePayload(ENUMS.PacketStreamData, payload, compression.TypeZLIB, compression.DefaultMinSize)
+	compressed, used := PreparePayload(Enums.PACKET_STREAM_DATA, payload, compression.TypeZLIB, compression.DefaultMinSize)
 	if used != compression.TypeZLIB {
 		t.Fatalf("unexpected compression type: got=%d want=%d", used, compression.TypeZLIB)
 	}
@@ -28,7 +28,7 @@ func TestPreparePayloadCompressesSupportedPacket(t *testing.T) {
 
 func TestPreparePayloadSkipsUnsupportedPacket(t *testing.T) {
 	payload := bytes.Repeat([]byte("abcdabcdabcdabcd"), 16)
-	compressed, used := PreparePayload(ENUMS.PacketSessionInit, payload, compression.TypeZLIB, compression.DefaultMinSize)
+	compressed, used := PreparePayload(Enums.PACKET_SESSION_INIT, payload, compression.TypeZLIB, compression.DefaultMinSize)
 	if used != compression.TypeOff {
 		t.Fatalf("unexpected compression type: got=%d want=%d", used, compression.TypeOff)
 	}
@@ -39,9 +39,9 @@ func TestPreparePayloadSkipsUnsupportedPacket(t *testing.T) {
 
 func TestInflatePayloadRoundTrip(t *testing.T) {
 	rawPayload := bytes.Repeat([]byte("abcdabcdabcdabcd"), 16)
-	compressed, used := PreparePayload(ENUMS.PacketStreamData, rawPayload, compression.TypeZLIB, compression.DefaultMinSize)
+	compressed, used := PreparePayload(Enums.PACKET_STREAM_DATA, rawPayload, compression.TypeZLIB, compression.DefaultMinSize)
 	packet := Packet{
-		PacketType:         ENUMS.PacketStreamData,
+		PacketType:         Enums.PACKET_STREAM_DATA,
 		HasCompressionType: true,
 		CompressionType:    used,
 		Payload:            compressed,

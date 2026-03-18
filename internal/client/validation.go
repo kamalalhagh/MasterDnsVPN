@@ -7,19 +7,21 @@
 
 package client
 
-import "masterdnsvpn-go/internal/enums"
-import VPNProto "masterdnsvpn-go/internal/vpnproto"
+import (
+	Enums "masterdnsvpn-go/internal/enums"
+	VpnProto "masterdnsvpn-go/internal/vpnproto"
+)
 
 func isPreSessionResponseType(packetType uint8) bool {
 	switch packetType {
-	case enums.PacketMTUUpRes, enums.PacketMTUDownRes, enums.PacketSessionAccept:
+	case Enums.PACKET_MTU_UP_RES, Enums.PACKET_MTU_DOWN_RES, Enums.PACKET_SESSION_ACCEPT:
 		return true
 	default:
 		return false
 	}
 }
 
-func (c *Client) validateServerPacket(packet VPNProto.Packet) bool {
+func (c *Client) validateServerPacket(packet VpnProto.Packet) bool {
 	if isPreSessionResponseType(packet.PacketType) {
 		return true
 	}

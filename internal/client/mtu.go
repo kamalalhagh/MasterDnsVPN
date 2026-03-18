@@ -17,8 +17,8 @@ import (
 	"time"
 
 	DnsParser "masterdnsvpn-go/internal/dnsparser"
-	ENUMS "masterdnsvpn-go/internal/enums"
-	VPNProto "masterdnsvpn-go/internal/vpnproto"
+	Enums "masterdnsvpn-go/internal/enums"
+	VpnProto "masterdnsvpn-go/internal/vpnproto"
 )
 
 var ErrNoValidConnections = errors.New("no valid connections after mtu testing")
@@ -246,7 +246,7 @@ func (c *Client) sendUploadMTUProbe(conn *Connection, probeTransport *mtuProbeTr
 		}
 	}
 
-	query, err := c.buildMTUProbeQuery(conn.Domain, ENUMS.PacketMTUUpReq, payload)
+	query, err := c.buildMTUProbeQuery(conn.Domain, Enums.PACKET_MTU_UP_REQ, payload)
 	if err != nil {
 		return false, nil
 	}
@@ -263,7 +263,7 @@ func (c *Client) sendUploadMTUProbe(conn *Connection, probeTransport *mtuProbeTr
 	if !c.validateServerPacket(packet) {
 		return false, nil
 	}
-	if packet.PacketType != ENUMS.PacketMTUUpRes {
+	if packet.PacketType != Enums.PACKET_MTU_UP_RES {
 		return false, nil
 	}
 	if len(packet.Payload) != 6 {
@@ -298,7 +298,7 @@ func (c *Client) sendDownloadMTUProbe(conn *Connection, probeTransport *mtuProbe
 		}
 	}
 
-	query, err := c.buildMTUProbeQuery(conn.Domain, ENUMS.PacketMTUDownReq, payload)
+	query, err := c.buildMTUProbeQuery(conn.Domain, Enums.PACKET_MTU_DOWN_REQ, payload)
 	if err != nil {
 		return false, nil
 	}
@@ -315,7 +315,7 @@ func (c *Client) sendDownloadMTUProbe(conn *Connection, probeTransport *mtuProbe
 	if !c.validateServerPacket(packet) {
 		return false, nil
 	}
-	if packet.PacketType != ENUMS.PacketMTUDownRes {
+	if packet.PacketType != Enums.PACKET_MTU_DOWN_RES {
 		return false, nil
 	}
 	if len(packet.Payload) != mtuSize {
@@ -331,7 +331,7 @@ func (c *Client) sendDownloadMTUProbe(conn *Connection, probeTransport *mtuProbe
 }
 
 func (c *Client) buildMTUProbeQuery(domain string, packetType uint8, payload []byte) ([]byte, error) {
-	encoded, err := VPNProto.BuildEncoded(VPNProto.BuildOptions{
+	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
 		SessionID:      255,
 		PacketType:     packetType,
 		StreamID:       1,
@@ -348,7 +348,7 @@ func (c *Client) buildMTUProbeQuery(domain string, packetType uint8, payload []b
 	if err != nil {
 		return nil, err
 	}
-	return DnsParser.BuildTXTQuestionPacket(name, ENUMS.DNSRecordTypeTXT, EDnsSafeUDPSize)
+	return DnsParser.BuildTXTQuestionPacket(name, Enums.DNS_RECORD_TYPE_TXT, EDnsSafeUDPSize)
 }
 
 func (c *Client) newMTUProbeTransport(conn *Connection) (*mtuProbeTransport, error) {
@@ -415,8 +415,8 @@ func (c *Client) canBuildUploadPayload(domain string, payloadLen int) bool {
 	for i := range payload {
 		payload[i] = 0xAB
 	}
-	packetType := VPNProto.MaxHeaderPacketType()
-	encoded, err := VPNProto.BuildEncoded(VPNProto.BuildOptions{
+	packetType := VpnProto.MaxHeaderPacketType()
+	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
 		SessionID:       255,
 		PacketType:      packetType,
 		SessionCookie:   255,
@@ -491,9 +491,9 @@ func (c *Client) encodedCharsForPayload(payloadLen int) int {
 	for i := range payload {
 		payload[i] = 0xAB
 	}
-	encoded, err := VPNProto.BuildEncoded(VPNProto.BuildOptions{
+	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
 		SessionID:       255,
-		PacketType:      ENUMS.PacketStreamData,
+		PacketType:      Enums.PACKET_STREAM_DATA,
 		SessionCookie:   255,
 		StreamID:        0xFFFF,
 		SequenceNum:     0xFFFF,

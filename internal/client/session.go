@@ -13,9 +13,9 @@ import (
 	"errors"
 
 	"masterdnsvpn-go/internal/compression"
-	"masterdnsvpn-go/internal/dnsparser"
-	"masterdnsvpn-go/internal/enums"
-	"masterdnsvpn-go/internal/vpnproto"
+	DnsParser "masterdnsvpn-go/internal/dnsparser"
+	Enums "masterdnsvpn-go/internal/enums"
+	VpnProto "masterdnsvpn-go/internal/vpnproto"
 )
 
 var ErrSessionInitFailed = errors.New("session init failed")
@@ -45,7 +45,7 @@ func (c *Client) InitializeSession(maxAttempts int) error {
 			return ErrNoValidConnections
 		}
 
-		query, err := c.buildSessionQuery(conn.Domain, enums.PacketSessionInit, initPayload)
+		query, err := c.buildSessionQuery(conn.Domain, Enums.PACKET_SESSION_INIT, initPayload)
 		if err != nil {
 			c.SetConnectionValidity(conn.Key, false)
 			continue
@@ -64,8 +64,8 @@ func (c *Client) InitializeSession(maxAttempts int) error {
 			continue
 		}
 
-		packet, err := dnsparser.ExtractVPNResponse(response, responseBase64)
-		if err != nil || !c.validateServerPacket(packet) || packet.PacketType != enums.PacketSessionAccept || len(packet.Payload) < sessionAcceptPayloadSize {
+		packet, err := DnsParser.ExtractVPNResponse(response, responseBase64)
+		if err != nil || !c.validateServerPacket(packet) || packet.PacketType != Enums.PACKET_SESSION_ACCEPT || len(packet.Payload) < sessionAcceptPayloadSize {
 			c.SetConnectionValidity(conn.Key, false)
 			continue
 		}
@@ -107,7 +107,7 @@ func (c *Client) buildSessionQuery(domain string, packetType uint8, payload []by
 }
 
 func (c *Client) buildTunnelQuery(domain string, sessionID uint8, packetType uint8, payload []byte) ([]byte, error) {
-	encoded, err := vpnproto.BuildEncoded(vpnproto.BuildOptions{
+	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
 		SessionID:  sessionID,
 		PacketType: packetType,
 		Payload:    payload,
@@ -116,9 +116,9 @@ func (c *Client) buildTunnelQuery(domain string, sessionID uint8, packetType uin
 		return nil, err
 	}
 
-	name, err := dnsparser.BuildTunnelQuestionName(domain, encoded)
+	name, err := DnsParser.BuildTunnelQuestionName(domain, encoded)
 	if err != nil {
 		return nil, err
 	}
-	return dnsparser.BuildTXTQuestionPacket(name, enums.DNSRecordTypeTXT, EDnsSafeUDPSize)
+	return DnsParser.BuildTXTQuestionPacket(name, Enums.DNS_RECORD_TYPE_TXT, EDnsSafeUDPSize)
 }

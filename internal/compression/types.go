@@ -29,6 +29,11 @@ var (
 			return bytes.NewBuffer(make([]byte, 0, 256))
 		},
 	}
+	deflateReaderPool = sync.Pool{
+		New: func() any {
+			return flate.NewReader(bytes.NewReader(nil))
+		},
+	}
 	deflateWriterPool = sync.Pool{
 		New: func() any {
 			writer, _ := flate.NewWriter(io.Discard, 1)
@@ -134,12 +139,14 @@ func TryDecompressPayload(data []byte, compType uint8) ([]byte, bool) {
 	switch compType {
 	case TypeZLIB:
 		reader := bytes.NewReader(data)
-		stream := flate.NewReader(reader)
+		stream := deflateReaderPool.Get().(io.ReadCloser)
+		stream.(flate.Resetter).Reset(reader, nil)
 		buffer := deflateBufferPool.Get().(*bytes.Buffer)
 		buffer.Reset()
 
 		_, err := buffer.ReadFrom(stream)
 		closeErr := stream.Close()
+		deflateReaderPool.Put(stream)
 		if err != nil || closeErr != nil || reader.Len() != 0 {
 			buffer.Reset()
 			deflateBufferPool.Put(buffer)

@@ -9,15 +9,15 @@ package dnsparser
 import (
 	"testing"
 
-	ENUMS "masterdnsvpn-go/internal/enums"
+	Enums "masterdnsvpn-go/internal/enums"
 )
 
 func TestParsePacketLiteParsesAllQuestions(t *testing.T) {
 	request := buildMultiQuestionDNSQuery(
 		0x4242,
 		[]liteQuestionSpec{
-			{Name: "example.com", Type: ENUMS.DNSRecordTypeA, Class: ENUMS.DNSQClassIN},
-			{Name: "example.org", Type: ENUMS.DNSRecordTypeAAAA, Class: ENUMS.DNSQClassIN},
+			{Name: "example.com", Type: Enums.DNS_RECORD_TYPE_A, Class: Enums.DNSQ_CLASS_IN},
+			{Name: "example.org", Type: Enums.DNS_RECORD_TYPE_AAAA, Class: Enums.DNSQ_CLASS_IN},
 		},
 		true,
 	)

@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"masterdnsvpn-go/internal/compression"
-	ENUMS "masterdnsvpn-go/internal/enums"
-	VPNProto "masterdnsvpn-go/internal/vpnproto"
+	Enums "masterdnsvpn-go/internal/enums"
+	VpnProto "masterdnsvpn-go/internal/vpnproto"
 )
 
 func TestBuildTunnelQuestionNameSplitsLabels(t *testing.T) {
@@ -28,14 +28,14 @@ func TestBuildTunnelQuestionNameSplitsLabels(t *testing.T) {
 }
 
 func TestBuildAndExtractVPNResponsePacketSingleAnswer(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
-	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VPNProto.Packet{
+	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VpnProto.Packet{
 		SessionID:  9,
-		PacketType: ENUMS.PacketMTUUpRes,
+		PacketType: Enums.PACKET_MTU_UP_RES,
 		Payload:    []byte("challenge"),
 	}, false)
 	if err != nil {
@@ -46,8 +46,8 @@ func TestBuildAndExtractVPNResponsePacketSingleAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUUpRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUUpRes)
+	if packet.PacketType != Enums.PACKET_MTU_UP_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_UP_RES)
 	}
 	if !bytes.Equal(packet.Payload, []byte("challenge")) {
 		t.Fatalf("unexpected payload: got=%q", packet.Payload)
@@ -55,15 +55,15 @@ func TestBuildAndExtractVPNResponsePacketSingleAnswer(t *testing.T) {
 }
 
 func TestBuildAndExtractVPNResponsePacketChunked(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
 	payload := bytes.Repeat([]byte{0xAB}, 700)
-	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VPNProto.Packet{
+	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VpnProto.Packet{
 		SessionID:   7,
-		PacketType:  ENUMS.PacketMTUDownRes,
+		PacketType:  Enums.PACKET_MTU_DOWN_RES,
 		StreamID:    1,
 		SequenceNum: 2,
 		Payload:     payload,
@@ -76,8 +76,8 @@ func TestBuildAndExtractVPNResponsePacketChunked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUDownRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUDownRes)
+	if packet.PacketType != Enums.PACKET_MTU_DOWN_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_DOWN_RES)
 	}
 	if !bytes.Equal(packet.Payload, payload) {
 		t.Fatalf("unexpected chunked payload size: got=%d want=%d", len(packet.Payload), len(payload))
@@ -85,14 +85,14 @@ func TestBuildAndExtractVPNResponsePacketChunked(t *testing.T) {
 }
 
 func TestBuildAndExtractVPNResponsePacketSingleAnswerBaseEncoded(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
-	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VPNProto.Packet{
+	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VpnProto.Packet{
 		SessionID:  9,
-		PacketType: ENUMS.PacketMTUUpRes,
+		PacketType: Enums.PACKET_MTU_UP_RES,
 		Payload:    []byte("challenge"),
 	}, true)
 	if err != nil {
@@ -103,8 +103,8 @@ func TestBuildAndExtractVPNResponsePacketSingleAnswerBaseEncoded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUUpRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUUpRes)
+	if packet.PacketType != Enums.PACKET_MTU_UP_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_UP_RES)
 	}
 	if !bytes.Equal(packet.Payload, []byte("challenge")) {
 		t.Fatalf("unexpected payload: got=%q", packet.Payload)
@@ -112,15 +112,15 @@ func TestBuildAndExtractVPNResponsePacketSingleAnswerBaseEncoded(t *testing.T) {
 }
 
 func TestBuildAndExtractVPNResponsePacketChunkedBaseEncoded(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
 	payload := bytes.Repeat([]byte{0xAB}, 700)
-	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VPNProto.Packet{
+	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VpnProto.Packet{
 		SessionID:   7,
-		PacketType:  ENUMS.PacketMTUDownRes,
+		PacketType:  Enums.PACKET_MTU_DOWN_RES,
 		StreamID:    1,
 		SequenceNum: 2,
 		Payload:     payload,
@@ -133,8 +133,8 @@ func TestBuildAndExtractVPNResponsePacketChunkedBaseEncoded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUDownRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUDownRes)
+	if packet.PacketType != Enums.PACKET_MTU_DOWN_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_DOWN_RES)
 	}
 	if !bytes.Equal(packet.Payload, payload) {
 		t.Fatalf("unexpected chunked payload size: got=%d want=%d", len(packet.Payload), len(payload))
@@ -142,15 +142,15 @@ func TestBuildAndExtractVPNResponsePacketChunkedBaseEncoded(t *testing.T) {
 }
 
 func TestBuildAndExtractVPNResponsePacketCompressed(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
 	payload := bytes.Repeat([]byte("abcdabcdabcdabcd"), 16)
-	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VPNProto.Packet{
+	response, err := BuildVPNResponsePacket(query, "x.v.example.com", VpnProto.Packet{
 		SessionID:       7,
-		PacketType:      ENUMS.PacketStreamData,
+		PacketType:      Enums.PACKET_STREAM_DATA,
 		SessionCookie:   9,
 		StreamID:        1,
 		SequenceNum:     2,
@@ -167,8 +167,8 @@ func TestBuildAndExtractVPNResponsePacketCompressed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketStreamData {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketStreamData)
+	if packet.PacketType != Enums.PACKET_STREAM_DATA {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_STREAM_DATA)
 	}
 	if !bytes.Equal(packet.Payload, payload) {
 		t.Fatal("unexpected inflated payload")
@@ -176,14 +176,14 @@ func TestBuildAndExtractVPNResponsePacketCompressed(t *testing.T) {
 }
 
 func TestExtractVPNResponseReordersChunkedAnswers(t *testing.T) {
-	query, err := BuildTXTQuestionPacket("x.v.example.com", ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := BuildTXTQuestionPacket("x.v.example.com", Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}
 
-	rawFrame, err := VPNProto.BuildRaw(VPNProto.BuildOptions{
+	rawFrame, err := VpnProto.BuildRaw(VpnProto.BuildOptions{
 		SessionID:   7,
-		PacketType:  ENUMS.PacketMTUDownRes,
+		PacketType:  Enums.PACKET_MTU_DOWN_RES,
 		StreamID:    1,
 		SequenceNum: 2,
 		Payload:     bytes.Repeat([]byte{0xCD}, 700),
@@ -213,8 +213,8 @@ func TestExtractVPNResponseReordersChunkedAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUDownRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUDownRes)
+	if packet.PacketType != Enums.PACKET_MTU_DOWN_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_DOWN_RES)
 	}
 	if len(packet.Payload) != 700 {
 		t.Fatalf("unexpected payload len: got=%d want=%d", len(packet.Payload), 700)
@@ -222,9 +222,9 @@ func TestExtractVPNResponseReordersChunkedAnswers(t *testing.T) {
 }
 
 func TestBuildTXTAnswerChunksRejectsTooManyChunks(t *testing.T) {
-	rawFrame, err := VPNProto.BuildRaw(VPNProto.BuildOptions{
+	rawFrame, err := VpnProto.BuildRaw(VpnProto.BuildOptions{
 		SessionID:   7,
-		PacketType:  ENUMS.PacketMTUDownRes,
+		PacketType:  Enums.PACKET_MTU_DOWN_RES,
 		StreamID:    1,
 		SequenceNum: 2,
 		Payload:     bytes.Repeat([]byte{0xEF}, 70000),

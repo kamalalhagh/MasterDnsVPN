@@ -15,9 +15,9 @@ import (
 
 	"masterdnsvpn-go/internal/config"
 	DnsParser "masterdnsvpn-go/internal/dnsparser"
-	ENUMS "masterdnsvpn-go/internal/enums"
+	Enums "masterdnsvpn-go/internal/enums"
 	"masterdnsvpn-go/internal/security"
-	VPNProto "masterdnsvpn-go/internal/vpnproto"
+	VpnProto "masterdnsvpn-go/internal/vpnproto"
 )
 
 func TestHandlePacketDropsDNSResponses(t *testing.T) {
@@ -27,7 +27,7 @@ func TestHandlePacketDropsDNSResponses(t *testing.T) {
 		MinVPNLabelLength: 3,
 	}, nil, nil)
 
-	packet := buildServerTestQuery(0x1001, "vpn.a.com", ENUMS.DNSRecordTypeTXT)
+	packet := buildServerTestQuery(0x1001, "vpn.a.com", Enums.DNS_RECORD_TYPE_TXT)
 	packet[2] |= 0x80
 
 	if response := srv.handlePacket(packet); response != nil {
@@ -42,7 +42,7 @@ func TestHandlePacketReturnsNoDataForUnauthorizedDomain(t *testing.T) {
 		MinVPNLabelLength: 3,
 	}, nil, nil)
 
-	packet := buildServerTestQuery(0x2002, "evil.com", ENUMS.DNSRecordTypeTXT)
+	packet := buildServerTestQuery(0x2002, "evil.com", Enums.DNS_RECORD_TYPE_TXT)
 	response := srv.handlePacket(packet)
 	if len(response) == 0 {
 		t.Fatal("handlePacket should return a DNS response for unauthorized DNS queries")
@@ -52,8 +52,8 @@ func TestHandlePacketReturnsNoDataForUnauthorizedDomain(t *testing.T) {
 		t.Fatalf("unexpected response id: got=%#x want=%#x", got, 0x2002)
 	}
 	flags := binary.BigEndian.Uint16(response[2:4])
-	if flags&0x000F != ENUMS.DNSRCodeNoError {
-		t.Fatalf("unexpected rcode: got=%d want=%d", flags&0x000F, ENUMS.DNSRCodeNoError)
+	if flags&0x000F != Enums.DNSR_CODE_NO_ERROR {
+		t.Fatalf("unexpected rcode: got=%d want=%d", flags&0x000F, Enums.DNSR_CODE_NO_ERROR)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestHandlePacketRespondsToMTUUpProbe(t *testing.T) {
 	verifyCode := []byte{0x11, 0x22, 0x33, 0x44}
 	payload := append([]byte{0}, verifyCode...)
 	payload = append(payload, bytes.Repeat([]byte{0xAB}, 64)...)
-	query := buildTunnelQuery(t, codec, "a.com", ENUMS.PacketMTUUpReq, payload)
+	query := buildTunnelQuery(t, codec, "a.com", Enums.PACKET_MTU_UP_REQ, payload)
 	response := srv.handlePacket(query)
 	if len(response) == 0 {
 		t.Fatal("handlePacket should return a vpn mtu-up response")
@@ -82,8 +82,8 @@ func TestHandlePacketRespondsToMTUUpProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUUpRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUUpRes)
+	if packet.PacketType != Enums.PACKET_MTU_UP_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_UP_RES)
 	}
 	if len(packet.Payload) != 6 {
 		t.Fatalf("unexpected mtu-up response length: got=%d want=%d", len(packet.Payload), 6)
@@ -114,7 +114,7 @@ func TestHandlePacketRespondsToMTUDownProbe(t *testing.T) {
 	copy(payload[1:5], verifyCode)
 	binary.BigEndian.PutUint16(payload[5:7], 128)
 	copy(payload[7:], bytes.Repeat([]byte{0xAB}, len(payload)-7))
-	query := buildTunnelQuery(t, codec, "a.com", ENUMS.PacketMTUDownReq, payload)
+	query := buildTunnelQuery(t, codec, "a.com", Enums.PACKET_MTU_DOWN_REQ, payload)
 	response := srv.handlePacket(query)
 	if len(response) == 0 {
 		t.Fatal("handlePacket should return a vpn mtu-down response")
@@ -124,8 +124,8 @@ func TestHandlePacketRespondsToMTUDownProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUDownRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUDownRes)
+	if packet.PacketType != Enums.PACKET_MTU_DOWN_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_DOWN_RES)
 	}
 	if len(packet.Payload) != 128 {
 		t.Fatalf("unexpected mtu-down payload length: got=%d want=%d", len(packet.Payload), 128)
@@ -153,7 +153,7 @@ func TestHandlePacketRespondsToMTUUpProbeBaseEncoded(t *testing.T) {
 	verifyCode := []byte{0x10, 0x20, 0x30, 0x40}
 	payload := append([]byte{1}, verifyCode...)
 	payload = append(payload, bytes.Repeat([]byte{0xAB}, 40)...)
-	query := buildTunnelQuery(t, codec, "a.com", ENUMS.PacketMTUUpReq, payload)
+	query := buildTunnelQuery(t, codec, "a.com", Enums.PACKET_MTU_UP_REQ, payload)
 	response := srv.handlePacket(query)
 	if len(response) == 0 {
 		t.Fatal("handlePacket should return a vpn mtu-up response")
@@ -163,8 +163,8 @@ func TestHandlePacketRespondsToMTUUpProbeBaseEncoded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet.PacketType != ENUMS.PacketMTUUpRes {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, ENUMS.PacketMTUUpRes)
+	if packet.PacketType != Enums.PACKET_MTU_UP_RES {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet.PacketType, Enums.PACKET_MTU_UP_RES)
 	}
 	if !bytes.Equal(packet.Payload[:4], verifyCode) {
 		t.Fatalf("unexpected echoed verify code: got=%v want=%v", packet.Payload[:4], verifyCode)
@@ -192,7 +192,7 @@ func TestHandlePacketCreatesAndReusesSessionInit(t *testing.T) {
 		verifyCode[0], verifyCode[1], verifyCode[2], verifyCode[3],
 	}
 
-	query1 := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, ENUMS.PacketSessionInit, payload)
+	query1 := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, payload)
 	response1 := srv.handlePacket(query1)
 	if len(response1) == 0 {
 		t.Fatal("handlePacket should return a session accept response")
@@ -202,8 +202,8 @@ func TestHandlePacketCreatesAndReusesSessionInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
 	}
-	if packet1.PacketType != ENUMS.PacketSessionAccept {
-		t.Fatalf("unexpected packet type: got=%d want=%d", packet1.PacketType, ENUMS.PacketSessionAccept)
+	if packet1.PacketType != Enums.PACKET_SESSION_ACCEPT {
+		t.Fatalf("unexpected packet type: got=%d want=%d", packet1.PacketType, Enums.PACKET_SESSION_ACCEPT)
 	}
 	if len(packet1.Payload) != 7 {
 		t.Fatalf("unexpected session payload len: got=%d want=7", len(packet1.Payload))
@@ -212,7 +212,7 @@ func TestHandlePacketCreatesAndReusesSessionInit(t *testing.T) {
 		t.Fatalf("unexpected verify code: got=%v want=%v", packet1.Payload[3:7], verifyCode)
 	}
 
-	query2 := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, ENUMS.PacketSessionInit, payload)
+	query2 := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, payload)
 	response2 := srv.handlePacket(query2)
 	packet2, err := DnsParser.ExtractVPNResponse(response2, true)
 	if err != nil {
@@ -243,9 +243,28 @@ func TestHandlePacketRejectsMalformedSessionInit(t *testing.T) {
 	}, nil, codec)
 
 	payload := []byte{1, 0x21, 0x00, 0x96, 0x00, 0xC8, 0x44, 0x33, 0x22, 0x11, 0x99}
-	query := buildTunnelQueryWithSessionID(t, codec, "a.com", 9, ENUMS.PacketSessionInit, payload)
+	query := buildTunnelQueryWithSessionID(t, codec, "a.com", 9, Enums.PACKET_SESSION_INIT, payload)
 	if response := srv.handlePacket(query); len(response) != 0 {
 		t.Fatal("malformed session init must be rejected")
+	}
+}
+
+func TestHandlePacketRejectsShortSessionInit(t *testing.T) {
+	codec, err := security.NewCodec(0, "")
+	if err != nil {
+		t.Fatalf("NewCodec returned error: %v", err)
+	}
+
+	srv := New(config.ServerConfig{
+		MaxPacketSize:     65535,
+		Domain:            []string{"a.com"},
+		MinVPNLabelLength: 3,
+	}, nil, codec)
+
+	payload := []byte{1, 0x21, 0x00, 0x96}
+	query := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, payload)
+	if response := srv.handlePacket(query); len(response) != 0 {
+		t.Fatal("short session init must be rejected")
 	}
 }
 
@@ -264,7 +283,7 @@ func TestHandlePacketNegotiatesUnsupportedCompressionToOff(t *testing.T) {
 	}, nil, codec)
 
 	payload := []byte{1, 0x31, 0x00, 0x96, 0x00, 0xC8, 0x44, 0x33, 0x22, 0x11}
-	query := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, ENUMS.PacketSessionInit, payload)
+	query := buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, payload)
 	response := srv.handlePacket(query)
 	if len(response) == 0 {
 		t.Fatal("handlePacket should return a session accept response")
@@ -300,7 +319,7 @@ func TestHandlePacketDropsPostSessionPacketWithInvalidCookie(t *testing.T) {
 		verifyCode[0], verifyCode[1], verifyCode[2], verifyCode[3],
 	}
 
-	initResponse := srv.handlePacket(buildTunnelQueryWithSessionID(t, codec, "a.com", 0, ENUMS.PacketSessionInit, initPayload))
+	initResponse := srv.handlePacket(buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, initPayload))
 	packet, err := DnsParser.ExtractVPNResponse(initResponse, true)
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
@@ -308,7 +327,7 @@ func TestHandlePacketDropsPostSessionPacketWithInvalidCookie(t *testing.T) {
 
 	sessionID := packet.Payload[0]
 	wrongCookie := packet.Payload[1] + 1
-	postSessionQuery := buildTunnelQueryWithCookie(t, codec, "a.com", sessionID, wrongCookie, ENUMS.PacketPing, nil)
+	postSessionQuery := buildTunnelQueryWithCookie(t, codec, "a.com", sessionID, wrongCookie, Enums.PACKET_PING, nil)
 	if response := srv.handlePacket(postSessionQuery); len(response) != 0 {
 		t.Fatal("post-session packet with invalid cookie must be dropped")
 	}
@@ -335,7 +354,7 @@ func TestHandlePacketAcceptsPostSessionPacketWithValidCookie(t *testing.T) {
 		verifyCode[0], verifyCode[1], verifyCode[2], verifyCode[3],
 	}
 
-	initResponse := srv.handlePacket(buildTunnelQueryWithSessionID(t, codec, "a.com", 0, ENUMS.PacketSessionInit, initPayload))
+	initResponse := srv.handlePacket(buildTunnelQueryWithSessionID(t, codec, "a.com", 0, Enums.PACKET_SESSION_INIT, initPayload))
 	packet, err := DnsParser.ExtractVPNResponse(initResponse, true)
 	if err != nil {
 		t.Fatalf("ExtractVPNResponse returned error: %v", err)
@@ -349,7 +368,7 @@ func TestHandlePacketAcceptsPostSessionPacketWithValidCookie(t *testing.T) {
 	}
 
 	time.Sleep(5 * time.Millisecond)
-	postSessionQuery := buildTunnelQueryWithCookie(t, codec, "a.com", sessionID, sessionCookie, ENUMS.PacketPing, nil)
+	postSessionQuery := buildTunnelQueryWithCookie(t, codec, "a.com", sessionID, sessionCookie, Enums.PACKET_PING, nil)
 	response := srv.handlePacket(postSessionQuery)
 	if len(response) == 0 {
 		t.Fatal("post-session packet with valid cookie should reach normal handler path")
@@ -460,7 +479,7 @@ func buildServerTestQuery(id uint16, name string, qtype uint16) []byte {
 	offset := 12
 	offset += copy(packet[offset:], qname)
 	binary.BigEndian.PutUint16(packet[offset:offset+2], qtype)
-	binary.BigEndian.PutUint16(packet[offset+2:offset+4], ENUMS.DNSQClassIN)
+	binary.BigEndian.PutUint16(packet[offset+2:offset+4], Enums.DNSQ_CLASS_IN)
 	return packet
 }
 
@@ -489,7 +508,7 @@ func buildTunnelQueryWithSessionID(t *testing.T, codec *security.Codec, name str
 func buildTunnelQueryWithCookie(t *testing.T, codec *security.Codec, name string, sessionID uint8, sessionCookie uint8, packetType uint8, payload []byte) []byte {
 	t.Helper()
 
-	encoded, err := VPNProto.BuildEncoded(VPNProto.BuildOptions{
+	encoded, err := VpnProto.BuildEncoded(VpnProto.BuildOptions{
 		SessionID:      sessionID,
 		PacketType:     packetType,
 		SessionCookie:  sessionCookie,
@@ -507,7 +526,7 @@ func buildTunnelQueryWithCookie(t *testing.T, codec *security.Codec, name string
 		t.Fatalf("BuildTunnelQuestionName returned error: %v", err)
 	}
 
-	query, err := DnsParser.BuildTXTQuestionPacket(questionName, ENUMS.DNSRecordTypeTXT, 4096)
+	query, err := DnsParser.BuildTXTQuestionPacket(questionName, Enums.DNS_RECORD_TYPE_TXT, 4096)
 	if err != nil {
 		t.Fatalf("BuildTXTQuestionPacket returned error: %v", err)
 	}

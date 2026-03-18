@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	DnsParser "masterdnsvpn-go/internal/dnsparser"
-	ENUMS "masterdnsvpn-go/internal/enums"
+	Enums "masterdnsvpn-go/internal/enums"
 )
 
 type Action uint8
@@ -89,7 +89,7 @@ func (m *Matcher) Match(parsed DnsParser.LitePacket) Decision {
 		}
 	}
 
-	if q0.Type != ENUMS.DNSRecordTypeTXT {
+	if q0.Type != Enums.DNS_RECORD_TYPE_TXT {
 		return Decision{
 			Action:       ActionNoData,
 			Reason:       "unsupported-qtype",
