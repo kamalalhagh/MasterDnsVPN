@@ -528,9 +528,11 @@ func (s *Server) buildSessionVPNResponse(questionPacket []byte, requestName stri
 	if record == nil {
 		return nil
 	}
-	packet.SessionID = record.ID
-	packet.SessionCookie = record.Cookie
-	response, err := DnsParser.BuildVPNResponsePacket(questionPacket, requestName, packet, record.ResponseMode == mtuProbeModeBase64)
+	sessionID := record.ID
+	sessionCookie := record.Cookie
+	packet.SessionID = sessionID
+	packet.SessionCookie = sessionCookie
+	response, err := DnsParser.BuildVPNResponsePacket(questionPacket, requestName, packet, record.ResponseBase64)
 	if err != nil {
 		return nil
 	}

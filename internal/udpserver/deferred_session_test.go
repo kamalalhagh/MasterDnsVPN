@@ -73,9 +73,10 @@ func TestHandlePingRequestServesQueuedOutboundPacket(t *testing.T) {
 	}, nil, nil)
 
 	record := &sessionRuntimeView{
-		ID:           7,
-		Cookie:       9,
-		ResponseMode: mtuProbeModeRaw,
+		ID:             7,
+		Cookie:         9,
+		ResponseMode:   mtuProbeModeRaw,
+		ResponseBase64: false,
 	}
 
 	if !srv.queueSessionPacket(record.ID, VpnProto.Packet{

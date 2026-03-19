@@ -51,6 +51,7 @@ type sessionRuntimeView struct {
 	ID                  uint8
 	Cookie              uint8
 	ResponseMode        uint8
+	ResponseBase64      bool
 	DownloadCompression uint8
 	DownloadMTU         uint16
 }
@@ -443,6 +444,7 @@ func (r *sessionRecord) runtimeView() sessionRuntimeView {
 		ID:                  r.ID,
 		Cookie:              r.Cookie,
 		ResponseMode:        r.ResponseMode,
+		ResponseBase64:      r.ResponseMode == mtuProbeModeBase64,
 		DownloadCompression: r.DownloadCompression,
 		DownloadMTU:         r.DownloadMTU,
 	}
