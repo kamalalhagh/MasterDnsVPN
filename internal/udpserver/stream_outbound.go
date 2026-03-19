@@ -110,6 +110,9 @@ func (s *streamOutboundStore) Next(sessionID uint8, now time.Time) (VpnProto.Pac
 		if !ok {
 			return VpnProto.Packet{}, false
 		}
+		if !requiresStreamOutboundAck(packet.PacketType) {
+			return packet, true
+		}
 		retryBase := streamOutboundRetryBase(session)
 		session.pending = append(session.pending, outboundPendingPacket{
 			Packet:     packet,
@@ -273,6 +276,15 @@ func matchesStreamOutboundAck(pendingType uint8, ackType uint8) bool {
 		return ackType == Enums.PACKET_STREAM_FIN_ACK
 	case Enums.PACKET_STREAM_RST:
 		return ackType == Enums.PACKET_STREAM_RST_ACK
+	default:
+		return false
+	}
+}
+
+func requiresStreamOutboundAck(packetType uint8) bool {
+	switch packetType {
+	case Enums.PACKET_STREAM_DATA, Enums.PACKET_STREAM_FIN, Enums.PACKET_STREAM_RST:
+		return true
 	default:
 		return false
 	}

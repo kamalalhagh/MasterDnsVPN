@@ -28,6 +28,8 @@ type ServerConfig struct {
 	SocketBufferSize                  int      `toml:"SOCKET_BUFFER_SIZE"`
 	MaxConcurrentRequests             int      `toml:"MAX_CONCURRENT_REQUESTS"`
 	DNSRequestWorkers                 int      `toml:"DNS_REQUEST_WORKERS"`
+	DeferredSessionWorkers            int      `toml:"DEFERRED_SESSION_WORKERS"`
+	DeferredSessionQueueLimit         int      `toml:"DEFERRED_SESSION_QUEUE_LIMIT"`
 	MaxPacketSize                     int      `toml:"MAX_PACKET_SIZE"`
 	DropLogIntervalSecs               float64  `toml:"DROP_LOG_INTERVAL_SECONDS"`
 	InvalidCookieWindowSecs           float64  `toml:"INVALID_COOKIE_WINDOW_SECONDS"`
@@ -69,6 +71,8 @@ func defaultServerConfig() ServerConfig {
 		SocketBufferSize:                  8 * 1024 * 1024,
 		MaxConcurrentRequests:             4096,
 		DNSRequestWorkers:                 workers,
+		DeferredSessionWorkers:            0,
+		DeferredSessionQueueLimit:         256,
 		MaxPacketSize:                     65535,
 		DropLogIntervalSecs:               2.0,
 		InvalidCookieWindowSecs:           2.0,
@@ -139,6 +143,18 @@ func LoadServerConfig(filename string) (ServerConfig, error) {
 
 	if cfg.DNSRequestWorkers <= 0 {
 		cfg.DNSRequestWorkers = defaultServerConfig().DNSRequestWorkers
+	}
+	if cfg.DeferredSessionWorkers < 0 {
+		cfg.DeferredSessionWorkers = 0
+	}
+	if cfg.DeferredSessionWorkers > 64 {
+		cfg.DeferredSessionWorkers = 64
+	}
+	if cfg.DeferredSessionQueueLimit < 1 {
+		cfg.DeferredSessionQueueLimit = 256
+	}
+	if cfg.DeferredSessionQueueLimit > 8192 {
+		cfg.DeferredSessionQueueLimit = 8192
 	}
 
 	if cfg.MaxPacketSize <= 0 {
