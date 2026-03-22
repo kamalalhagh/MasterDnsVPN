@@ -202,10 +202,6 @@ func (c *Client) getStreamARQ(streamID uint16) (*arq.ARQ, error) {
 	return arqObj, nil
 }
 
-func (c *Client) HandlePackedControlBlocks(payload []byte) error {
-	return nil
-}
-
 // clientStreamTXPacket represents a queued packet pending transmission or retransmission.
 type clientStreamTXPacket struct {
 	PacketType     uint8
@@ -438,6 +434,7 @@ func (c *Client) Run(ctx context.Context) error {
 			if !c.successMTUChecks {
 				if err := c.RunInitialMTUTests(ctx); err != nil {
 					c.log.Errorf("<red>MTU tests failed: %v</red>", err)
+					c.successMTUChecks = false
 					// Wait a bit before retrying or exiting if critical
 					select {
 					case <-ctx.Done():
@@ -550,23 +547,15 @@ func (c *Client) applySyncedMTUState(uploadMTU int, downloadMTU int, uploadChars
 	if c == nil {
 		return
 	}
-	c.successMTUChecks = uploadMTU > 0 && downloadMTU > 0
 	c.syncedUploadMTU = uploadMTU
 	c.syncedDownloadMTU = downloadMTU
 	c.syncedUploadChars = uploadChars
 	c.safeUploadMTU = computeSafeUploadMTU(uploadMTU, c.mtuCryptoOverhead)
-	c.updateMaxPackedBlocks()
+	c.maxPackedBlocks = VpnProto.CalculateMaxPackedBlocks(uploadMTU, 50, 0)
 	c.applySessionCompressionPolicy()
 	if c.log != nil && c.successMTUChecks {
 		c.log.Infof("\U0001F4CF <green>MTU state applied: UP=%d, DOWN=%d</green>", uploadMTU, downloadMTU)
 	}
-}
-
-func (c *Client) updateMaxPackedBlocks() {
-	c.maxPackedBlocks = computeClientPackedControlBlockLimit(
-		c.syncedUploadMTU,
-		c.cfg.MaxPacketsPerBatch,
-	)
 }
 
 func (c *Client) applySessionCompressionPolicy() {
@@ -636,31 +625,6 @@ func (c *Client) applySessionCompressionPolicy() {
 			compression.TypeName(c.downloadCompression),
 		)
 	}
-}
-
-const (
-	packedControlBlockSize         = 7
-	clientPackedBlockUsagePercent  = 50
-	defaultPackedControlBlockLimit = 1
-)
-
-func computeClientPackedControlBlockLimit(mtu int, maxPacketsPerBatch int) int {
-	if mtu < 1 {
-		return defaultPackedControlBlockLimit
-	}
-	usableBudget := (mtu * clientPackedBlockUsagePercent) / 100
-	mtuLimit := usableBudget / packedControlBlockSize
-	if mtuLimit < 1 {
-		mtuLimit = defaultPackedControlBlockLimit
-	}
-	userLimit := maxPacketsPerBatch
-	if userLimit < 1 {
-		userLimit = defaultPackedControlBlockLimit
-	}
-	if userLimit < mtuLimit {
-		return userLimit
-	}
-	return mtuLimit
 }
 
 // initResolverRecheckMeta initializes metadata for resolver health monitoring.

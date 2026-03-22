@@ -26,7 +26,6 @@ type ClientContext interface {
 
 	// Stream Management
 	HandleStreamPacket(packet VpnProto.Packet) error
-	HandlePackedControlBlocks(payload []byte) error
 
 	// Session Management
 	HandleSessionReject(packet VpnProto.Packet) error
