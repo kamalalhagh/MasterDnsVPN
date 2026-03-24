@@ -455,6 +455,8 @@ func (a *ARQ) MarkFinReceived() {
 	if a.finSent {
 		a.setState(StateClosing)
 		a.mu.Unlock()
+		a.halfCloseLocalWriter()
+		a.tryFinalizeRemoteEOF()
 		return
 	}
 
