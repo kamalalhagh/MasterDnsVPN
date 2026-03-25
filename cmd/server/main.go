@@ -49,6 +49,13 @@ func main() {
 	} else {
 		log = logger.New("MasterDnsVPN Server", cfg.LogLevel)
 	}
+
+	log.Infof("============================================================")
+	log.Infof("<cyan>GitHub:</cyan> <yellow>https://github.com/masterking32/MasterDnsVPN</yellow>")
+	log.Infof("<cyan>Telegram:</cyan> <yellow>@MasterDnsVPN</yellow>")
+	log.Infof("<cyan>Build Version:</cyan> <yellow>%s</yellow>", version.GetVersion())
+	log.Infof("============================================================")
+
 	log.Infof("\U0001F680 <magenta>MasterDnsVPN Server starting ...</magenta>")
 
 	keyInfo, err := security.EnsureServerEncryptionKey(cfg)

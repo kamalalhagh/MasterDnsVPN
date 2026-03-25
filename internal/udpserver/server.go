@@ -21,7 +21,6 @@ import (
 	fragmentStore "masterdnsvpn-go/internal/fragmentstore"
 	"masterdnsvpn-go/internal/logger"
 	"masterdnsvpn-go/internal/security"
-	"masterdnsvpn-go/internal/version"
 )
 
 const (
@@ -183,12 +182,6 @@ func (s *Server) Run(ctx context.Context) error {
 		s.cfg.DNSRequestWorkers,
 		s.cfg.MaxConcurrentRequests,
 	)
-
-	s.log.Infof("============================================================")
-	s.log.Infof("<cyan>GitHub:</cyan> <yellow>https://github.com/masterking32/MasterDnsVPN</yellow>")
-	s.log.Infof("<cyan>Telegram:</cyan> <yellow>@MasterDnsVPN</yellow>")
-	s.log.Infof("<cyan>Build Version:</cyan> <yellow>%s</yellow>", version.GetVersion())
-	s.log.Infof("============================================================")
 
 	reqCh := make(chan request, s.cfg.MaxConcurrentRequests)
 	var workerWG sync.WaitGroup
