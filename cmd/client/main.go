@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"masterdnsvpn-go/internal/client"
@@ -23,7 +24,9 @@ func main() {
 	logPath := flag.String("log", "", "Path to log file (optional)")
 	flag.Parse()
 
-	app, err := client.Bootstrap(*configPath, *logPath)
+	resolvedConfigPath := resolveRuntimePath(*configPath)
+
+	app, err := client.Bootstrap(resolvedConfigPath, *logPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Client startup failed: %v\n", err)
 		os.Exit(1)
@@ -34,7 +37,7 @@ func main() {
 	log := app.Log()
 	if log != nil {
 		log.Infof("\U0001F680 <green>MasterDnsVPN Client Started</green>")
-		log.Infof("\U0001F4C4 <green>Configuration loaded from: <cyan>%s</cyan></green>", *configPath)
+		log.Infof("\U0001F4C4 <green>Configuration loaded from: <cyan>%s</cyan></green>", resolvedConfigPath)
 		log.Infof("\U0001F5C2  <green>Connection Catalog: <cyan>%d</cyan> domain-resolver pairs</green>", len(app.Connections()))
 	}
 
@@ -51,4 +54,27 @@ func main() {
 	if log != nil {
 		log.Infof("\U0001F6D1 <red>Shutting down...</red>")
 	}
+}
+
+func resolveRuntimePath(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return path
+	}
+
+	exeDir := filepath.Dir(exePath)
+	candidate := filepath.Join(exeDir, path)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+
+	return path
 }

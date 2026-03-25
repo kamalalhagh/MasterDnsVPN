@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -27,7 +28,9 @@ func main() {
 	logPath := flag.String("log", "", "Path to log file (optional)")
 	flag.Parse()
 
-	cfg, err := config.LoadServerConfig(*configPath)
+	resolvedConfigPath := resolveRuntimePath(*configPath)
+
+	cfg, err := config.LoadServerConfig(resolvedConfigPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Server startup failed: %v\n", err)
 		os.Exit(1)
@@ -115,4 +118,27 @@ func main() {
 	}
 
 	log.Infof("\U0001F6D1 <yellow>Server Stopped</yellow>")
+}
+
+func resolveRuntimePath(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return path
+	}
+
+	exeDir := filepath.Dir(exePath)
+	candidate := filepath.Join(exeDir, path)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
+
+	return path
 }

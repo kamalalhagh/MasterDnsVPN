@@ -1261,7 +1261,8 @@ func (a *ARQ) handleTerminalRetransmitState(now time.Time) bool {
 	// Check for peer-signaled reset termination
 	if (a.state == StateReset || a.rstReceived) && !a.closed {
 		a.mu.Unlock()
-		a.finalizeClose("Stream Reset (Retransmit Path Check)")
+		a.MarkRstReceived()
+		a.Close("Peer reset signaled", CloseOptions{Force: true})
 		return true
 	}
 
