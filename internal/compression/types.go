@@ -255,7 +255,6 @@ func decompressZSTD(data []byte) ([]byte, error) {
 	if err := decoder.Reset(bytes.NewReader(data)); err != nil {
 		return nil, err
 	}
-	defer decoder.Close()
 
 	buffer := deflateBufferPool.Get().(*bytes.Buffer)
 	buffer.Reset()
