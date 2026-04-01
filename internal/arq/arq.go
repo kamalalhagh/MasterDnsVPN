@@ -234,7 +234,6 @@ const (
 	ioRetryBackoff         = 100 * time.Millisecond
 	ioTransientReadBudget  = 3 * time.Second
 	ioTransientWriteBudget = 3
-	ioReadMaxPackets       = 1
 )
 
 func classifyIOError(err error) ioErrorClass {
@@ -929,13 +928,11 @@ func (a *ARQ) ioLoop() {
 	var errorReason string
 	var transientReadSince time.Time
 
-	readBufferSize := max(max(a.mtu*ioReadMaxPackets, a.mtu), 1)
-	buf := make([]byte, readBufferSize)
+	buf := make([]byte, max(a.mtu, 1))
 
 	for !a.isClosed() {
 		a.waitWindowNotFull()
 
-		readBudget := a.mtu
 		a.mu.Lock()
 		if a.stopLocalRead || a.closed {
 			a.mu.Unlock()
@@ -959,72 +956,47 @@ func (a *ARQ) ioLoop() {
 			resetRequired = true
 			break
 		}
-		freeSlots := max(a.limit-len(a.sndBuf), 1)
-		packetsToRead := min(freeSlots, ioReadMaxPackets)
-		readBudget = min(max(packetsToRead*a.mtu, 1), len(buf))
 		a.mu.Unlock()
 
 		if c, ok := a.localConn.(interface{ SetReadDeadline(time.Time) error }); ok {
 			_ = c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		}
 
-		n, err := a.localConn.Read(buf[:readBudget])
+		n, err := a.localConn.Read(buf)
 		if n > 0 {
 			transientReadSince = time.Time{}
-			chunkSize := a.mtu
-			if chunkSize < 1 {
-				chunkSize = n
-			}
-
-			type outboundChunk struct {
-				sn   uint16
-				data []byte
-			}
-
-			now := time.Now()
-			outbound := make([]outboundChunk, 0, (n+chunkSize-1)/chunkSize)
+			raw := append([]byte(nil), buf[:n]...)
 
 			a.mu.Lock()
-			a.lastActivity = now
+			a.lastActivity = time.Now()
+			sn := a.sndNxt
+			a.sndNxt++
 			currentRTO := a.currentDataBaseRTO()
-			for offset := 0; offset < n; offset += chunkSize {
-				end := offset + chunkSize
-				if end > n {
-					end = n
-				}
-				raw := append([]byte(nil), buf[offset:end]...)
-				sn := a.sndNxt
-				a.sndNxt++
-
-				a.sndBuf[sn] = &arqDataItem{
-					Data:            raw,
-					CreatedAt:       now,
-					LastSentAt:      time.Time{},
-					Dispatched:      false,
-					Retries:         0,
-					CurrentRTO:      currentRTO,
-					SampleEligible:  true,
-					CompressionType: a.compressionType,
-					TTL:             0,
-				}
-				outbound = append(outbound, outboundChunk{sn: sn, data: raw})
+			a.sndBuf[sn] = &arqDataItem{
+				Data:            raw,
+				CreatedAt:       time.Now(),
+				LastSentAt:      time.Time{},
+				Dispatched:      false,
+				Retries:         0,
+				CurrentRTO:      currentRTO,
+				SampleEligible:  true,
+				CompressionType: a.compressionType,
+				TTL:             0,
 			}
 			a.mu.Unlock()
 
-			for _, chunk := range outbound {
-				ok := a.enqueuer.PushTXPacket(
-					Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
-					Enums.PACKET_STREAM_DATA,
-					chunk.sn, 0, 0, a.compressionType, 0, chunk.data,
-				)
-				if !ok {
-					a.mu.Lock()
-					if info, exists := a.sndBuf[chunk.sn]; exists {
-						info.Dispatched = true
-						info.LastSentAt = time.Now().Add(-info.CurrentRTO)
-					}
-					a.mu.Unlock()
+			ok := a.enqueuer.PushTXPacket(
+				Enums.DefaultPacketPriority(Enums.PACKET_STREAM_DATA),
+				Enums.PACKET_STREAM_DATA,
+				sn, 0, 0, a.compressionType, 0, raw,
+			)
+			if !ok {
+				a.mu.Lock()
+				if info, exists := a.sndBuf[sn]; exists {
+					info.Dispatched = true
+					info.LastSentAt = time.Now().Add(-info.CurrentRTO)
 				}
+				a.mu.Unlock()
 			}
 		}
 
