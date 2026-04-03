@@ -24,6 +24,29 @@ var (
 	lowerBase36DecodeMap = newLowerBase36DecodeMap()
 )
 
+func EncodedLenLowerBase36(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	// ceil(n * log_36(256))
+	return (n*103 + 63) / 64
+}
+
+func EncodeLowerBase36To(dst []byte, data []byte) int {
+	if len(data) == 0 {
+		return 0
+	}
+	encoded := EncodeLowerBase36Bytes(data)
+	return copy(dst, encoded)
+}
+
+func EncodeLowerBase36Bytes(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	return []byte(EncodeLowerBase36(data))
+}
+
 func EncodeLowerBase36(data []byte) string {
 	if len(data) == 0 {
 		return ""

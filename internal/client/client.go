@@ -101,9 +101,8 @@ type Client struct {
 	asyncWG              sync.WaitGroup
 	asyncCancel          context.CancelFunc
 	tunnelConn           *net.UDPConn
-	txChannel            chan asyncPacket
+	txChannel            chan rawOutboundTask
 	rxChannel            chan asyncReadPacket
-	encodeChannel        chan rawOutboundTask
 	tunnelReaderWorkers  int
 	tunnelWriterWorkers  int
 	tunnelProcessWorkers int
@@ -257,9 +256,8 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		tunnelWriterWorkers:   cfg.TunnelWriterWorkers,
 		tunnelProcessWorkers:  cfg.TunnelProcessWorkers,
 		tunnelPacketTimeout:   time.Duration(cfg.TunnelPacketTimeoutSec * float64(time.Second)),
-		txChannel:             make(chan asyncPacket, cfg.TXChannelSize),
+		txChannel:             make(chan rawOutboundTask, cfg.TXChannelSize),
 		rxChannel:             make(chan asyncReadPacket, cfg.RXChannelSize),
-		encodeChannel:         make(chan rawOutboundTask, cfg.TXChannelSize),
 		active_streams:        make(map[uint16]*Stream_client),
 		recentlyClosedStreams: make(map[uint16]time.Time),
 		txSignal:              make(chan struct{}, 1),

@@ -124,10 +124,10 @@ func TestOnRXDropIncrementsCounter(t *testing.T) {
 
 func TestDrainQueues(t *testing.T) {
 	c := createTestClient(t)
-	c.txChannel = make(chan asyncPacket, 5)
+	c.txChannel = make(chan rawOutboundTask, 5)
 	c.rxChannel = make(chan asyncReadPacket, 5)
 
-	c.txChannel <- asyncPacket{}
+	c.txChannel <- rawOutboundTask{}
 	c.rxChannel <- asyncReadPacket{data: make([]byte, 10)}
 
 	c.drainQueues()
