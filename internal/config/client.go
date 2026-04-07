@@ -593,6 +593,45 @@ func (c ClientConfig) EffectiveDNSResponseFragmentStoreCap() int {
 	return clampInt(size, 128, 2048)
 }
 
+func (c ClientConfig) EffectiveRXChannelSize() int {
+	maxDup := max(max(c.PacketDuplicationCount, c.SetupPacketDuplicationCount), 1)
+	workerBudget := max(c.RX_TX_Workers+c.TunnelProcessWorkers, 2)
+	recommended := clampInt(workerBudget*c.MaxPacketsPerBatch*maxDup*16, 1024, 32768)
+	return max(c.RXChannelSize, recommended)
+}
+
+func (c ClientConfig) EffectiveMTUTestParallelism() int {
+	totalResolvers := len(c.Resolvers)
+	if totalResolvers <= 1 {
+		return max(1, c.MTUTestParallelism)
+	}
+
+	recommended := 2
+	switch {
+	case totalResolvers <= 4:
+		recommended = 2
+	case totalResolvers <= 8:
+		recommended = 4
+	case totalResolvers <= 16:
+		recommended = 6
+	case totalResolvers <= 32:
+		recommended = 8
+	case totalResolvers <= 64:
+		recommended = 12
+	case totalResolvers <= 128:
+		recommended = 16
+	default:
+		recommended = 20
+	}
+
+	maxSafe := clampInt(max(c.RX_TX_Workers*2, 4), 4, 24)
+	if recommended > maxSafe {
+		recommended = maxSafe
+	}
+
+	return max(c.MTUTestParallelism, recommended)
+}
+
 func applyClientConfigOverrideValues(cfg *ClientConfig, values map[string]any) error {
 	if cfg == nil || len(values) == 0 {
 		return nil

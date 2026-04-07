@@ -92,7 +92,7 @@ func (c *Client) RunInitialMTUTests(ctx context.Context) error {
 	}
 
 	uploadCaps := c.precomputeUploadCaps()
-	workerCount := min(max(1, c.cfg.MTUTestParallelism), len(scanConnections))
+	workerCount := min(max(1, c.cfg.EffectiveMTUTestParallelism()), len(scanConnections))
 	c.logMTUStart(workerCount)
 	c.prepareMTUSuccessOutputFile()
 

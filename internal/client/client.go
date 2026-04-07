@@ -246,7 +246,7 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		tunnelPacketTimeout:     time.Duration(cfg.TunnelPacketTimeoutSec * float64(time.Second)),
 		plannerQueue:            make(chan plannerTask, max(24, cfg.RX_TX_Workers*24)),
 		encodedTXChannel:        make(chan writerTask, max(24, cfg.RX_TX_Workers*24)),
-		rxChannel:               make(chan asyncReadPacket, cfg.RXChannelSize),
+		rxChannel:               make(chan asyncReadPacket, cfg.EffectiveRXChannelSize()),
 		active_streams:          make(map[uint16]*Stream_client),
 		recentlyClosedStreams:   make(map[uint16]time.Time),
 		dispatchSignal:          make(chan struct{}, 1),
