@@ -78,6 +78,7 @@ type Balancer struct {
 	rrCounter       atomic.Uint64
 	healthRRCounter atomic.Uint64
 	rngState        atomic.Uint64
+	nextPendingSweep atomic.Int64
 
 	mu           sync.RWMutex
 	connections  []Connection
@@ -397,7 +398,9 @@ func (b *Balancer) TrackResolverSend(
 
 	b.pendingMu.Lock()
 	if len(b.pending) >= resolverPendingSoftCap {
-		timeoutObservations = b.prunePendingLocked(sentAt, requestTimeout, ttl)
+		var nextDue time.Time
+		timeoutObservations, nextDue = b.prunePendingLocked(sentAt, requestTimeout, ttl)
+		b.setNextPendingSweepLocked(nextDue)
 		if overflow := len(b.pending) - resolverPendingHardCap; overflow >= 0 {
 			b.evictPendingLocked(overflow + 1)
 		}
@@ -406,6 +409,7 @@ func (b *Balancer) TrackResolverSend(
 		serverKey: serverKey,
 		sentAt:    sentAt,
 	}
+	b.schedulePendingSweepAt(sentAt.Add(requestTimeout))
 	b.pendingMu.Unlock()
 
 	for _, observation := range timeoutObservations {
@@ -516,12 +520,16 @@ func (b *Balancer) CollectExpiredResolverTimeouts(
 	if !autoDisable {
 		return
 	}
+	if !b.pendingSweepDue(now) {
+		return
+	}
 
 	requestTimeout := resolverRequestTimeout(tunnelPacketTimeout, checkInterval, window)
 	ttl := resolverSampleTTL(tunnelPacketTimeout)
 
 	b.pendingMu.Lock()
-	timeoutObservations := b.prunePendingLocked(now, requestTimeout, ttl)
+	timeoutObservations, nextDue := b.prunePendingLocked(now, requestTimeout, ttl)
+	b.setNextPendingSweepLocked(nextDue)
 	b.pendingMu.Unlock()
 
 	for _, observation := range timeoutObservations {
@@ -1151,21 +1159,58 @@ func resolverLateResponseGrace(requestTimeout time.Duration, ttl time.Duration) 
 	return grace
 }
 
-func (b *Balancer) prunePendingLocked(now time.Time, requestTimeout time.Duration, ttl time.Duration) []balancerTimeoutObservation {
+func (b *Balancer) pendingSweepDue(now time.Time) bool {
+	if b == nil {
+		return false
+	}
+	nextUnix := b.nextPendingSweep.Load()
+	return nextUnix == 0 || now.UnixNano() >= nextUnix
+}
+
+func (b *Balancer) schedulePendingSweepAt(next time.Time) {
+	if b == nil || next.IsZero() {
+		return
+	}
+	nextUnix := next.UnixNano()
+	for {
+		current := b.nextPendingSweep.Load()
+		if current != 0 && current <= nextUnix {
+			return
+		}
+		if b.nextPendingSweep.CompareAndSwap(current, nextUnix) {
+			return
+		}
+	}
+}
+
+func (b *Balancer) setNextPendingSweepLocked(next time.Time) {
+	if b == nil {
+		return
+	}
+	if next.IsZero() {
+		b.nextPendingSweep.Store(0)
+		return
+	}
+	b.nextPendingSweep.Store(next.UnixNano())
+}
+
+func (b *Balancer) prunePendingLocked(now time.Time, requestTimeout time.Duration, ttl time.Duration) ([]balancerTimeoutObservation, time.Time) {
 	if b == nil || len(b.pending) == 0 {
-		return nil
+		return nil, time.Time{}
 	}
 
 	timeoutBefore := now.Add(-requestTimeout)
 	absoluteCutoff := now.Add(-ttl)
 	lateGrace := resolverLateResponseGrace(requestTimeout, ttl)
 	var timeoutObservations []balancerTimeoutObservation
+	var nextDue time.Time
 
 	for key, sample := range b.pending {
 		if !sample.timedOut {
+			timeoutAt := sample.sentAt.Add(requestTimeout)
 			if !sample.sentAt.After(timeoutBefore) {
 				sample.timedOut = true
-				sample.timedOutAt = sample.sentAt.Add(requestTimeout)
+				sample.timedOutAt = timeoutAt
 				if sample.timedOutAt.After(now) {
 					sample.timedOutAt = now
 				}
@@ -1177,6 +1222,8 @@ func (b *Balancer) prunePendingLocked(now time.Time, requestTimeout time.Duratio
 						at:        sample.timedOutAt,
 					})
 				}
+			} else if nextDue.IsZero() || timeoutAt.Before(nextDue) {
+				nextDue = timeoutAt
 			}
 			if sample.sentAt.Before(absoluteCutoff) {
 				delete(b.pending, key)
@@ -1190,10 +1237,18 @@ func (b *Balancer) prunePendingLocked(now time.Time, requestTimeout time.Duratio
 		}
 		if sample.sentAt.Before(absoluteCutoff) {
 			delete(b.pending, key)
+			continue
+		}
+		evictAt := sample.evictAfter
+		if evictAt.IsZero() {
+			evictAt = sample.sentAt.Add(ttl)
+		}
+		if nextDue.IsZero() || evictAt.Before(nextDue) {
+			nextDue = evictAt
 		}
 	}
 
-	return timeoutObservations
+	return timeoutObservations, nextDue
 }
 
 func (b *Balancer) evictPendingLocked(evictCount int) {
