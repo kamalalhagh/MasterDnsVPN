@@ -36,6 +36,13 @@ func (c *Client) runtimePacketDuplicationCount(packetType uint8) int {
 
 func (c *Client) selectTargetConnectionsForPacket(packetType uint8, streamID uint16) ([]Connection, error) {
 	targetCount := c.runtimePacketDuplicationCount(packetType)
+	return c.selectTargetConnectionsForPacketCount(packetType, streamID, targetCount)
+}
+
+func (c *Client) selectTargetConnectionsForPacketCount(packetType uint8, streamID uint16, targetCount int) ([]Connection, error) {
+	if targetCount < 1 {
+		targetCount = 1
+	}
 
 	if c == nil || c.balancer == nil || streamID == 0 || c.balancer.ValidCount() <= 0 {
 		return c.selectUniqueRuntimeConnections(targetCount)

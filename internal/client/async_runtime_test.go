@@ -94,17 +94,17 @@ func TestClearDispatchSignal(t *testing.T) {
 	}
 }
 
-func TestClearEncodeQueueSpaceSignal(t *testing.T) {
+func TestClearPlannerQueueSpaceSignal(t *testing.T) {
 	c := createTestClient(t)
-	c.encodeQueueSpaceSignal = make(chan struct{}, 5)
-	c.encodeQueueSpaceSignal <- struct{}{}
-	c.encodeQueueSpaceSignal <- struct{}{}
+	c.plannerQueueSpaceSignal = make(chan struct{}, 5)
+	c.plannerQueueSpaceSignal <- struct{}{}
+	c.plannerQueueSpaceSignal <- struct{}{}
 
-	c.clearEncodeQueueSpaceSignal()
+	c.clearPlannerQueueSpaceSignal()
 
 	select {
-	case <-c.encodeQueueSpaceSignal:
-		t.Fatal("encodeQueueSpaceSignal should be empty")
+	case <-c.plannerQueueSpaceSignal:
+		t.Fatal("plannerQueueSpaceSignal should be empty")
 	default:
 	}
 }
@@ -157,18 +157,18 @@ func TestTrackResolverSendBoundsResolverPendingGrowth(t *testing.T) {
 
 func TestDrainQueues(t *testing.T) {
 	c := createTestClient(t)
-	c.encodeQueue = make(chan encodeTask, 5)
-	c.encodedTXChannel = make(chan encodedOutboundTask, 5)
+	c.plannerQueue = make(chan plannerTask, 5)
+	c.encodedTXChannel = make(chan writerTask, 5)
 	c.rxChannel = make(chan asyncReadPacket, 5)
 
-	c.encodeQueue <- encodeTask{}
-	c.encodedTXChannel <- encodedOutboundTask{}
+	c.plannerQueue <- plannerTask{}
+	c.encodedTXChannel <- writerTask{}
 	c.rxChannel <- asyncReadPacket{data: make([]byte, 10)}
 
 	c.drainQueues()
 
-	if len(c.encodeQueue) != 0 {
-		t.Errorf("expected encodeQueue empty, got %d", len(c.encodeQueue))
+	if len(c.plannerQueue) != 0 {
+		t.Errorf("expected plannerQueue empty, got %d", len(c.plannerQueue))
 	}
 	if len(c.encodedTXChannel) != 0 {
 		t.Errorf("expected encodedTXChannel empty, got %d", len(c.encodedTXChannel))

@@ -14,7 +14,7 @@ func TestAsyncStreamDispatcherDrainsQueuedWorkAfterSingleWake(t *testing.T) {
 		t.Fatalf("BuildConnectionMap returned error: %v", err)
 	}
 
-	c.encodeQueue = make(chan encodeTask, 4)
+	c.plannerQueue = make(chan plannerTask, 4)
 	c.active_streams = make(map[uint16]*Stream_client)
 
 	stream := &Stream_client{
@@ -50,18 +50,18 @@ func TestAsyncStreamDispatcherDrainsQueuedWorkAfterSingleWake(t *testing.T) {
 	}
 
 	waitForCondition(t, time.Second, func() bool {
-		return len(c.encodeQueue) == 2
+		return len(c.plannerQueue) == 2
 	}, "expected dispatcher to drain both queued packets after a single wake signal")
 
 	cancel()
 	c.asyncWG.Wait()
 }
 
-func TestAsyncStreamDispatcherWakesOnEncodeQueueSpaceSignal(t *testing.T) {
+func TestAsyncStreamDispatcherWakesOnPlannerQueueSpaceSignal(t *testing.T) {
 	c := createTestClient(t)
 	c.cfg.DispatcherIdlePollIntervalSeconds = 0.01
 	c.dispatchSignal = make(chan struct{}, 1)
-	c.encodeQueueSpaceSignal = make(chan struct{}, 1)
+	c.plannerQueueSpaceSignal = make(chan struct{}, 1)
 	c.active_streams = make(map[uint16]*Stream_client)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,11 +70,11 @@ func TestAsyncStreamDispatcherWakesOnEncodeQueueSpaceSignal(t *testing.T) {
 	c.asyncWG.Add(1)
 	go c.asyncStreamDispatcher(ctx)
 
-	c.encodeQueueSpaceSignal <- struct{}{}
+	c.plannerQueueSpaceSignal <- struct{}{}
 	time.Sleep(40 * time.Millisecond)
 
-	if len(c.encodeQueueSpaceSignal) != 0 {
-		t.Fatal("expected dispatcher to consume encodeQueueSpaceSignal wakeup")
+	if len(c.plannerQueueSpaceSignal) != 0 {
+		t.Fatal("expected dispatcher to consume plannerQueueSpaceSignal wakeup")
 	}
 
 	cancel()

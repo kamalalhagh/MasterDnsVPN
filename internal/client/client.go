@@ -102,8 +102,8 @@ type Client struct {
 	asyncWG              sync.WaitGroup
 	asyncCancel          context.CancelFunc
 	tunnelConns          []*net.UDPConn
-	encodeQueue          chan encodeTask
-	encodedTXChannel     chan encodedOutboundTask
+	plannerQueue         chan plannerTask
+	encodedTXChannel     chan writerTask
 	rxChannel            chan asyncReadPacket
 	tunnelRX_TX_Workers  int
 	tunnelProcessWorkers int
@@ -123,9 +123,9 @@ type Client struct {
 	recentlyClosedStreams map[uint16]time.Time
 
 	// Signals to wake up dispatcher and downstream stages.
-	dispatchSignal         chan struct{}
-	encodeQueueSpaceSignal chan struct{}
-	writerQueueSpaceSignal chan struct{}
+	dispatchSignal          chan struct{}
+	plannerQueueSpaceSignal chan struct{}
+	writerQueueSpaceSignal  chan struct{}
 
 	// Autonomous Ping Manager
 	pingManager *PingManager
@@ -160,10 +160,10 @@ type clientStreamTXPacket struct {
 	Scheduled       bool
 }
 
-// encodeTask is the handoff between dispatcher and the planner/encoder stage.
+// plannerTask is the handoff between dispatcher and the planner/encoder stage.
 // The dispatcher only decides fairness/dequeue/packing. Resolver selection and
 // fan-out happen later in the encode stage.
-type encodeTask struct {
+type plannerTask struct {
 	opts      VpnProto.BuildOptions
 	dupCount  int
 	wasPacked bool
@@ -177,7 +177,7 @@ type encodedOutboundDatagram struct {
 	packet    []byte
 }
 
-type encodedOutboundTask struct {
+type writerTask struct {
 	wasPacked bool
 	item      *clientStreamTXPacket
 	selected  *Stream_client
@@ -269,17 +269,17 @@ func New(cfg config.ClientConfig, log *logger.Logger, codec *security.Codec) *Cl
 		streamResolverFailoverCooldown:        time.Duration(cfg.StreamResolverFailoverCooldownSec * float64(time.Second)),
 
 		// Workers config
-		tunnelRX_TX_Workers:    cfg.RX_TX_Workers,
-		tunnelProcessWorkers:   cfg.TunnelProcessWorkers,
-		tunnelPacketTimeout:    time.Duration(cfg.TunnelPacketTimeoutSec * float64(time.Second)),
-		encodeQueue:            make(chan encodeTask, max(24, cfg.RX_TX_Workers*24)),
-		encodedTXChannel:       make(chan encodedOutboundTask, max(24, cfg.RX_TX_Workers*24)),
-		rxChannel:              make(chan asyncReadPacket, cfg.RXChannelSize),
-		active_streams:         make(map[uint16]*Stream_client),
-		recentlyClosedStreams:  make(map[uint16]time.Time),
-		dispatchSignal:         make(chan struct{}, 1),
-		encodeQueueSpaceSignal: make(chan struct{}, 1),
-		writerQueueSpaceSignal: make(chan struct{}, 1),
+		tunnelRX_TX_Workers:     cfg.RX_TX_Workers,
+		tunnelProcessWorkers:    cfg.TunnelProcessWorkers,
+		tunnelPacketTimeout:     time.Duration(cfg.TunnelPacketTimeoutSec * float64(time.Second)),
+		plannerQueue:            make(chan plannerTask, max(24, cfg.RX_TX_Workers*24)),
+		encodedTXChannel:        make(chan writerTask, max(24, cfg.RX_TX_Workers*24)),
+		rxChannel:               make(chan asyncReadPacket, cfg.RXChannelSize),
+		active_streams:          make(map[uint16]*Stream_client),
+		recentlyClosedStreams:   make(map[uint16]time.Time),
+		dispatchSignal:          make(chan struct{}, 1),
+		plannerQueueSpaceSignal: make(chan struct{}, 1),
+		writerQueueSpaceSignal:  make(chan struct{}, 1),
 
 		// DNS Management
 		localDNSCache: dnsCache.New(

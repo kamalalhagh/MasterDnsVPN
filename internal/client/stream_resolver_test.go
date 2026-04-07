@@ -219,6 +219,21 @@ func TestSelectTargetConnectionsForPacketAppliesDuplicationCountToPing(t *testin
 	}
 }
 
+func TestSelectTargetConnectionsForPacketCountUsesPlannerCount(t *testing.T) {
+	c := buildTestClientWithResolvers(config.ClientConfig{
+		PacketDuplicationCount:      5,
+		SetupPacketDuplicationCount: 5,
+	}, "a", "b", "c", "d")
+
+	selected, err := c.selectTargetConnectionsForPacketCount(Enums.PACKET_PING, 42, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(selected) != 1 {
+		t.Fatalf("expected planner-selected count to be honored, got=%d", len(selected))
+	}
+}
+
 func TestNoteStreamProgressResetsResolverResendStreak(t *testing.T) {
 	c := buildTestClientWithResolvers(config.ClientConfig{}, "a")
 

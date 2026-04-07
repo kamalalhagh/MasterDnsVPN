@@ -35,7 +35,7 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 		case <-ctx.Done():
 			return false
 		case <-c.dispatchSignal:
-		case <-c.encodeQueueSpaceSignal:
+		case <-c.plannerQueueSpaceSignal:
 		case <-idleTimer.C:
 		}
 		if !idleTimer.Stop() {
@@ -48,19 +48,19 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 		return true
 	}
 
-	waitForEncodeCapacity := func(required int) bool {
+	waitForPlannerCapacity := func(required int) bool {
 		if required <= 0 {
 			return true
 		}
 		for {
-			if c.encodeQueueHasCapacity(required) {
+			if c.plannerQueueHasCapacity(required) {
 				return true
 			}
 
 			select {
 			case <-ctx.Done():
 				return false
-			case <-c.encodeQueueSpaceSignal:
+			case <-c.plannerQueueSpaceSignal:
 			case <-idleTimer.C:
 			}
 
@@ -203,7 +203,7 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 			continue
 		}
 
-		if !waitForEncodeCapacity(1) {
+		if !waitForPlannerCapacity(1) {
 			if ctx.Err() != nil {
 				return
 			}
@@ -369,7 +369,7 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 			opts.TotalFragments = item.TotalFragments
 		}
 
-		task := encodeTask{
+		task := plannerTask{
 			opts:      opts,
 			dupCount:  c.runtimePacketDuplicationCount(finalPacketType),
 			wasPacked: wasPacked,
@@ -378,7 +378,7 @@ func (c *Client) asyncStreamDispatcher(ctx context.Context) {
 		}
 
 		select {
-		case c.encodeQueue <- task:
+		case c.plannerQueue <- task:
 		case <-ctx.Done():
 			if !wasPacked && selected != nil {
 				selected.ReleaseTXPacket(item)

@@ -87,7 +87,7 @@ func (c *Client) resetRuntimeBindings(resetSession bool) {
 
 	c.closeResolverConnPools()
 	c.clearDispatchSignal()
-	c.clearEncodeQueueSpaceSignal()
+	c.clearPlannerQueueSpaceSignal()
 	c.clearWriterQueueSpaceSignal()
 	c.clearSessionResetPending()
 	if resetSession {
@@ -108,13 +108,13 @@ func (c *Client) clearDispatchSignal() {
 	}
 }
 
-func (c *Client) clearEncodeQueueSpaceSignal() {
-	if c == nil || c.encodeQueueSpaceSignal == nil {
+func (c *Client) clearPlannerQueueSpaceSignal() {
+	if c == nil || c.plannerQueueSpaceSignal == nil {
 		return
 	}
 	for {
 		select {
-		case <-c.encodeQueueSpaceSignal:
+		case <-c.plannerQueueSpaceSignal:
 		default:
 			return
 		}
@@ -134,12 +134,12 @@ func (c *Client) clearWriterQueueSpaceSignal() {
 	}
 }
 
-func (c *Client) signalEncodeQueueSpace() {
-	if c == nil || c.encodeQueueSpaceSignal == nil {
+func (c *Client) signalPlannerQueueSpace() {
+	if c == nil || c.plannerQueueSpaceSignal == nil {
 		return
 	}
 	select {
-	case c.encodeQueueSpaceSignal <- struct{}{}:
+	case c.plannerQueueSpaceSignal <- struct{}{}:
 	default:
 	}
 }
@@ -154,14 +154,14 @@ func (c *Client) signalWriterQueueSpace() {
 	}
 }
 
-func (c *Client) encodeQueueHasCapacity(needed int) bool {
-	if c == nil || c.encodeQueue == nil {
+func (c *Client) plannerQueueHasCapacity(needed int) bool {
+	if c == nil || c.plannerQueue == nil {
 		return false
 	}
 	if needed <= 0 {
 		needed = 1
 	}
-	return cap(c.encodeQueue)-len(c.encodeQueue) >= needed
+	return cap(c.plannerQueue)-len(c.plannerQueue) >= needed
 }
 
 func (c *Client) encodedTXChannelHasCapacity(needed int) bool {
@@ -329,10 +329,10 @@ func (c *Client) StartAsyncRuntime(parentCtx context.Context) error {
 		go c.asyncProcessorWorker(runtimeCtx, i)
 	}
 
-	// 6. Spawn Encoder Workers (packet build stage)
+	// 6. Spawn Planner/Encoder Workers (routing + packet build stage)
 	for i := 0; i < c.tunnelRX_TX_Workers; i++ {
 		c.asyncWG.Add(1)
-		go c.asyncEncodeWorker(runtimeCtx, i)
+		go c.asyncPlanEncodeWorker(runtimeCtx, i)
 	}
 
 	// 7. Spawn Writer Workers (UDP send stage)
@@ -452,7 +452,7 @@ func (c *Client) drainQueues() {
 	// Drain TX
 	for {
 		select {
-		case task := <-c.encodeQueue:
+		case task := <-c.plannerQueue:
 			if !task.wasPacked && task.selected != nil && task.item != nil {
 				task.selected.ReleaseTXPacket(task.item)
 			}
@@ -497,10 +497,11 @@ func (c *Client) closeTunnelSockets() {
 	c.tunnelConns = nil
 }
 
-// asyncEncodeWorker turns raw outbound tasks into ready-to-send DNS packets.
-func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
+// asyncPlanEncodeWorker chooses runtime targets, applies fan-out policy, encodes
+// the tunnel payload, and emits writer-ready DNS datagrams.
+func (c *Client) asyncPlanEncodeWorker(ctx context.Context, id int) {
 	defer c.asyncWG.Done()
-	c.log.Debugf("\U0001F9E9 <green>Encode Worker <cyan>#%d</cyan> started</green>", id)
+	c.log.Debugf("\U0001F9E9 <green>Planner/Encoder Worker <cyan>#%d</cyan> started</green>", id)
 	defaultDomain := ""
 	if len(c.cfg.Domains) > 0 {
 		defaultDomain = c.cfg.Domains[0]
@@ -513,126 +514,37 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 		select {
 		case <-ctx.Done():
 			return
-		case task, ok := <-c.encodeQueue:
-			c.signalEncodeQueueSpace()
+		case task, ok := <-c.plannerQueue:
+			c.signalPlannerQueueSpace()
 			if !ok {
 				return
 			}
 
-			encoded, err := c.buildEncodedAutoWithCompressionTrace(task.opts)
+			targetCount := task.dupCount
+			if targetCount < 1 {
+				targetCount = 1
+			}
+
+			conns, err := c.selectTargetConnectionsForPacketCount(task.opts.PacketType, task.opts.StreamID, targetCount)
+			if err != nil {
+				conns = nil
+			}
+
+			if len(conns) == 0 {
+				c.handlePlannerTaskWithoutConnections(task)
+				continue
+			}
+
+			if !c.waitForWriterCapacity(ctx, task, len(conns)) {
+				return
+			}
+
+			frames, err = c.buildPlannedOutboundFrames(task, conns, defaultDomain, packetByDomain, preparedDomainByName, frames)
 			if err != nil {
 				if !task.wasPacked && task.selected != nil {
 					task.selected.ReleaseTXPacket(task.item)
 				}
 				continue
-			}
-
-			var (
-				firstDomain    string
-				firstDNSPacket []byte
-			)
-			if packetByDomain != nil {
-				clear(packetByDomain)
-			}
-			if preparedDomainByName != nil {
-				clear(preparedDomainByName)
-			}
-			frames = frames[:0]
-
-			conns, err := c.selectTargetConnectionsForPacket(task.opts.PacketType, task.opts.StreamID)
-			if err != nil {
-				conns = nil
-			}
-			if len(conns) == 0 {
-				if task.opts.PacketType != Enums.PACKET_STREAM_DATA && task.opts.PacketType != Enums.PACKET_STREAM_RESEND {
-					if !task.wasPacked && task.selected != nil {
-						task.selected.ReleaseTXPacket(task.item)
-					}
-				} else if task.selected != nil && task.item != nil && !task.wasPacked {
-					task.selected.PushTXPacket(
-						Enums.DefaultPacketPriority(task.item.PacketType),
-						task.item.PacketType,
-						task.item.SequenceNum,
-						task.item.FragmentID,
-						task.item.TotalFragments,
-						task.item.CompressionType,
-						task.item.TTL,
-						task.item.Payload,
-					)
-					task.selected.ReleaseTXPacket(task.item)
-				}
-				continue
-			}
-
-			requiredWriterSlots := len(conns)
-			if requiredWriterSlots < 1 {
-				requiredWriterSlots = 1
-			}
-			for !c.encodedTXChannelHasCapacity(requiredWriterSlots) {
-				select {
-				case <-ctx.Done():
-					if !task.wasPacked && task.selected != nil {
-						task.selected.ReleaseTXPacket(task.item)
-					}
-					return
-				case <-c.writerQueueSpaceSignal:
-				}
-			}
-
-			for _, resolverConn := range conns {
-				domain := resolverConn.Domain
-				if domain == "" {
-					domain = defaultDomain
-				}
-
-				addr, err := c.getResolverUDPAddr(resolverConn)
-				if err != nil {
-					continue
-				}
-
-				prepared, cachedPrepared := preparedDomainByName[domain]
-				if !cachedPrepared {
-					prepared, err = prepareTunnelDomain(domain)
-					if err != nil {
-						continue
-					}
-					if preparedDomainByName == nil {
-						preparedDomainByName = make(map[string]preparedTunnelDomain, len(conns))
-					}
-					preparedDomainByName[domain] = prepared
-				}
-
-				var dnsPacket []byte
-				switch {
-				case firstDNSPacket == nil:
-					dnsPacket, err = buildTunnelTXTQuestionBytesPrepared(prepared, encoded)
-					if err != nil {
-						continue
-					}
-					firstDomain = domain
-					firstDNSPacket = dnsPacket
-				case domain == firstDomain:
-					dnsPacket = firstDNSPacket
-				default:
-					if packetByDomain == nil {
-						packetByDomain = make(map[string][]byte, max(0, len(conns)-1))
-					}
-					var cached bool
-					dnsPacket, cached = packetByDomain[domain]
-					if !cached {
-						dnsPacket, err = buildTunnelTXTQuestionBytesPrepared(prepared, encoded)
-						if err != nil {
-							continue
-						}
-						packetByDomain[domain] = dnsPacket
-					}
-				}
-
-				frames = append(frames, encodedOutboundDatagram{
-					addr:      addr,
-					serverKey: resolverConn.Key,
-					packet:    dnsPacket,
-				})
 			}
 
 			if len(frames) == 0 {
@@ -642,7 +554,7 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 				continue
 			}
 
-			encodedTask := encodedOutboundTask{
+			encodedTask := writerTask{
 				wasPacked: task.wasPacked,
 				item:      task.item,
 				selected:  task.selected,
@@ -659,6 +571,130 @@ func (c *Client) asyncEncodeWorker(ctx context.Context, id int) {
 			}
 		}
 	}
+}
+
+func (c *Client) handlePlannerTaskWithoutConnections(task plannerTask) {
+	if task.opts.PacketType != Enums.PACKET_STREAM_DATA && task.opts.PacketType != Enums.PACKET_STREAM_RESEND {
+		if !task.wasPacked && task.selected != nil {
+			task.selected.ReleaseTXPacket(task.item)
+		}
+		return
+	}
+	if task.selected == nil || task.item == nil || task.wasPacked {
+		return
+	}
+	task.selected.PushTXPacket(
+		Enums.DefaultPacketPriority(task.item.PacketType),
+		task.item.PacketType,
+		task.item.SequenceNum,
+		task.item.FragmentID,
+		task.item.TotalFragments,
+		task.item.CompressionType,
+		task.item.TTL,
+		task.item.Payload,
+	)
+	task.selected.ReleaseTXPacket(task.item)
+}
+
+func (c *Client) waitForWriterCapacity(ctx context.Context, task plannerTask, requiredWriterSlots int) bool {
+	if requiredWriterSlots < 1 {
+		requiredWriterSlots = 1
+	}
+	for !c.encodedTXChannelHasCapacity(requiredWriterSlots) {
+		select {
+		case <-ctx.Done():
+			if !task.wasPacked && task.selected != nil {
+				task.selected.ReleaseTXPacket(task.item)
+			}
+			return false
+		case <-c.writerQueueSpaceSignal:
+		}
+	}
+	return true
+}
+
+func (c *Client) buildPlannedOutboundFrames(
+	task plannerTask,
+	conns []Connection,
+	defaultDomain string,
+	packetByDomain map[string][]byte,
+	preparedDomainByName map[string]preparedTunnelDomain,
+	frames []encodedOutboundDatagram,
+) ([]encodedOutboundDatagram, error) {
+	encoded, err := c.buildEncodedAutoWithCompressionTrace(task.opts)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		firstDomain    string
+		firstDNSPacket []byte
+	)
+	if packetByDomain != nil {
+		clear(packetByDomain)
+	}
+	if preparedDomainByName != nil {
+		clear(preparedDomainByName)
+	}
+	frames = frames[:0]
+
+	for _, resolverConn := range conns {
+		domain := resolverConn.Domain
+		if domain == "" {
+			domain = defaultDomain
+		}
+
+		addr, err := c.getResolverUDPAddr(resolverConn)
+		if err != nil {
+			continue
+		}
+
+		prepared, cachedPrepared := preparedDomainByName[domain]
+		if !cachedPrepared {
+			prepared, err = prepareTunnelDomain(domain)
+			if err != nil {
+				continue
+			}
+			if preparedDomainByName == nil {
+				preparedDomainByName = make(map[string]preparedTunnelDomain, len(conns))
+			}
+			preparedDomainByName[domain] = prepared
+		}
+
+		var dnsPacket []byte
+		switch {
+		case firstDNSPacket == nil:
+			dnsPacket, err = buildTunnelTXTQuestionBytesPrepared(prepared, encoded)
+			if err != nil {
+				continue
+			}
+			firstDomain = domain
+			firstDNSPacket = dnsPacket
+		case domain == firstDomain:
+			dnsPacket = firstDNSPacket
+		default:
+			if packetByDomain == nil {
+				packetByDomain = make(map[string][]byte, max(0, len(conns)-1))
+			}
+			var cached bool
+			dnsPacket, cached = packetByDomain[domain]
+			if !cached {
+				dnsPacket, err = buildTunnelTXTQuestionBytesPrepared(prepared, encoded)
+				if err != nil {
+					continue
+				}
+				packetByDomain[domain] = dnsPacket
+			}
+		}
+
+		frames = append(frames, encodedOutboundDatagram{
+			addr:      addr,
+			serverKey: resolverConn.Key,
+			packet:    dnsPacket,
+		})
+	}
+
+	return frames, nil
 }
 
 // asyncWriterWorker sends already-built DNS packets on the assigned socket.
