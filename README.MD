@@ -98,6 +98,8 @@ A brief overview of the main capabilities of MasterDnsVPN:
 
 This list is only a high-level summary. The related sections below explain each area in more detail.
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/masterking32/MasterDnsVPN)
+
 ---
 
 # Setup and Getting Started 🧑‍💻
